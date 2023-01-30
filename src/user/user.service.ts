@@ -19,6 +19,7 @@ export class UserService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>
   ) { }
+
   async createUser(createUserDto: CreateUserDto): Promise<UserEntity> {
     const userByEmail = await this.userRepository.findOne({
       where: { email: createUserDto.email }
@@ -45,7 +46,7 @@ export class UserService {
       where: {
         email: loginUserDto.email
       },
-      select: ['id', 'username', 'bio', 'image', 'password']
+      select: ['id', 'username', 'email', 'bio', 'image', 'password']
     })
 
     if (!user) {
@@ -69,6 +70,7 @@ export class UserService {
   }
 
   generateJwt(user: UserEntity): string {
+    console.log('Full user lets see: ', user)
     return sign({
       id: user.id,
       username: user.username,

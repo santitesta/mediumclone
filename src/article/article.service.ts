@@ -1,19 +1,23 @@
 import { UserEntity } from "@app/user/user.entity";
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DeleteResult, Repository } from "typeorm";
+import { ArrayContains, DataSource, DeleteResult, Repository } from "typeorm";
 import { ArticleEntity } from "./article.entity";
 import { CreateArticleDto } from "./dto/createArticle.dto";
 import { ArticleResponseInterface } from "./types/articleResponse.interface";
 import { HttpException } from "@nestjs/common/exceptions";
 import { HttpStatus } from "@nestjs/common/enums";
 import slugify from "slugify";
+import { ArticlesResponseInterface } from "./types/articlesResponse.interface";
 
 @Injectable()
 export class ArticleService {
   constructor(
     @InjectRepository(ArticleEntity)
-    private readonly articleRepository: Repository<ArticleEntity>
+    private readonly articleRepository: Repository<ArticleEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+    private dataSource: DataSource
   ) { }
 
   async createArticle(
@@ -21,7 +25,9 @@ export class ArticleService {
     createArticleDto: CreateArticleDto
   ): Promise<ArticleEntity> {
     const article = new ArticleEntity();
+
     Object.assign(article, createArticleDto);
+
     if (!article.tagList) {
       article.tagList = [];
     }
@@ -31,6 +37,51 @@ export class ArticleService {
     article.author = currentUser;
 
     return await this.articleRepository.save(article);
+  }
+
+  async findAll(currentUserId: number, query: any): Promise<ArticlesResponseInterface> {
+    const queryBuilder = this.dataSource.getRepository(ArticleEntity).createQueryBuilder(
+      'articles',
+    ).leftJoinAndSelect(
+      'articles.author',
+      'author');
+
+    if (query.tag) {
+      queryBuilder.andWhere('articles.tagList LIKE :tag', {
+        tag: `%${query.tag}`,
+      })
+    }
+
+    if (query.author) {
+      const author = await this.userRepository.findOne({
+        where: {
+          username: query.author
+        }
+      })
+      queryBuilder.andWhere('articles.authorId = :id', {
+        id: author?.id
+      })
+    }
+
+    if (query.orderBy) {
+      queryBuilder.orderBy('articles.createdAt', query.orderBy);
+    }
+
+    if (query.limit) {
+      queryBuilder.limit(query.limit);
+    }
+
+    if (query.offset) {
+      queryBuilder.offset(query.offset);
+    }
+
+    const articles = await queryBuilder.getMany();
+    const articlesCount = await queryBuilder.getCount();
+    // const articles = await this.articleRepository.find() //Another way to do it, easier. Take = limit, skip = offset
+    // const articlesCount = await this.articleRepository.count()
+
+    return { articles, articlesCount };
+
   }
 
   async findBySlug(slug: string): Promise<ArticleEntity> {

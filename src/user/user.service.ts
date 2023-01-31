@@ -70,7 +70,6 @@ export class UserService {
   }
 
   generateJwt(user: UserEntity): string {
-    console.log('Full user lets see: ', user)
     return sign({
       id: user.id,
       username: user.username,

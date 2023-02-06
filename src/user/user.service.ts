@@ -56,7 +56,6 @@ export class UserService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
-    console.log('Passwords: ', user.password, loginUserDto.password);
 
     const isPasswordCorrect = await compare(
       loginUserDto.password,

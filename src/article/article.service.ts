@@ -1,14 +1,15 @@
-import { UserEntity } from "@app/user/user.entity";
-import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { ArrayContains, DataSource, DeleteResult, Repository } from "typeorm";
-import { ArticleEntity } from "./article.entity";
-import { CreateArticleDto } from "./dto/createArticle.dto";
-import { ArticleResponseInterface } from "./types/articleResponse.interface";
-import { HttpException } from "@nestjs/common/exceptions";
-import { HttpStatus } from "@nestjs/common/enums";
-import slugify from "slugify";
-import { ArticlesResponseInterface } from "./types/articlesResponse.interface";
+import { UserEntity } from '@app/user/user.entity';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, DeleteResult, Repository } from 'typeorm';
+import { ArticleEntity } from './article.entity';
+import { CreateArticleDto } from './dto/createArticle.dto';
+import { ArticleResponseInterface } from './types/articleResponse.interface';
+import { HttpException } from '@nestjs/common/exceptions';
+import { HttpStatus } from '@nestjs/common/enums';
+import slugify from 'slugify';
+import { ArticlesResponseInterface } from './types/articlesResponse.interface';
+import { FollowEntity } from '@app/profile/follow.entity';
 
 @Injectable()
 export class ArticleService {
@@ -17,12 +18,14 @@ export class ArticleService {
     private readonly articleRepository: Repository<ArticleEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    private dataSource: DataSource
-  ) { }
+    @InjectRepository(FollowEntity)
+    private readonly followRepository: Repository<FollowEntity>,
+    private dataSource: DataSource,
+  ) {}
 
   async createArticle(
     currentUser: UserEntity,
-    createArticleDto: CreateArticleDto
+    createArticleDto: CreateArticleDto,
   ): Promise<ArticleEntity> {
     const article = new ArticleEntity();
 
@@ -39,41 +42,43 @@ export class ArticleService {
     return await this.articleRepository.save(article);
   }
 
-  async findAll(currentUserId: number, query: any): Promise<ArticlesResponseInterface> {
-    const queryBuilder = this.dataSource.getRepository(ArticleEntity).createQueryBuilder(
-      'articles',
-    ).leftJoinAndSelect(
-      'articles.author',
-      'author');
+  async findAll(
+    currentUserId: number,
+    query: any,
+  ): Promise<ArticlesResponseInterface> {
+    const queryBuilder = this.dataSource
+      .getRepository(ArticleEntity)
+      .createQueryBuilder('articles')
+      .leftJoinAndSelect('articles.author', 'author');
 
     if (query.tag) {
       queryBuilder.andWhere('articles.tagList LIKE :tag', {
         tag: `%${query.tag}`,
-      })
+      });
     }
 
     if (query.author) {
       const author = await this.userRepository.findOne({
         where: {
-          username: query.author
-        }
-      })
+          username: query.author,
+        },
+      });
       queryBuilder.andWhere('articles.authorId = :id', {
-        id: author?.id
-      })
+        id: author?.id,
+      });
     }
 
     if (query.favorited) {
       const author = await this.userRepository.findOne({
         where: {
-          username: query.favorited
+          username: query.favorited,
         },
-        relations: ['favorites']
-      })
-      const ids = author.favorites.map(e => e.id)
+        relations: ['favorites'],
+      });
+      const ids = author.favorites.map((e) => e.id);
 
       if (ids.length > 0) {
-        queryBuilder.andWhere('articles.id IN (:...ids)', { ids })
+        queryBuilder.andWhere('articles.id IN (:...ids)', { ids });
       } else {
         queryBuilder.andWhere('1=0');
       }
@@ -91,41 +96,80 @@ export class ArticleService {
       queryBuilder.offset(query.offset);
     }
 
-    let favoriteIds: number[] = []
+    let favoriteIds: number[] = [];
     if (currentUserId) {
       const currentUser = await this.userRepository.findOne({
         where: { id: currentUserId },
-        relations: ['favorites']
-      })
-      favoriteIds = currentUser.favorites.map(f => f.id);
+        relations: ['favorites'],
+      });
+      favoriteIds = currentUser.favorites.map((f) => f.id);
     }
 
     const articlesCount = await queryBuilder.getCount();
     const articles = await queryBuilder.getMany();
-    const articlesWithFavorited = articles.map(article => {
-      const favorited = favoriteIds.includes(article.id)
+    const articlesWithFavorited = articles.map((article) => {
+      const favorited = favoriteIds.includes(article.id);
       return { ...article, favorited };
-    })
+    });
 
     // const articles = await this.articleRepository.find() //Another way to do it, easier. Take = limit, skip = offset
     // const articlesCount = await this.articleRepository.count()
 
     return { articles: articlesWithFavorited, articlesCount };
+  }
 
+  async getFeed(
+    currentUserId: number,
+    query: any,
+  ): Promise<ArticlesResponseInterface> {
+    const follows = await this.followRepository.find({
+      where: { followerId: currentUserId },
+    });
+
+    if (!follows.length) {
+      return { articles: [], articlesCount: 0 };
+    }
+
+    const followingUserIds = follows.map((f) => f.followingId);
+    const queryBuilder = this.dataSource
+      .getRepository(ArticleEntity)
+      .createQueryBuilder('articles')
+      .leftJoinAndSelect('articles.author', 'author')
+      .where('articles.authorId IN (:...ids)', { ids: followingUserIds });
+
+    queryBuilder.orderBy('articles.createdAt', 'DESC');
+
+    const articlesCount = await queryBuilder.getCount();
+
+    if (query.limit) {
+      queryBuilder.limit(query.limit);
+    }
+
+    if (query.offset) {
+      queryBuilder.offset(query.offset);
+    }
+
+    const articles = await queryBuilder.getMany();
+
+    return { articles, articlesCount };
   }
 
   async findBySlug(slug: string): Promise<ArticleEntity> {
     return await this.articleRepository.findOne({ where: { slug } });
   }
 
-  async addArticleToFavorites(slug: string, userId: number): Promise<ArticleEntity> {
+  async addArticleToFavorites(
+    slug: string,
+    userId: number,
+  ): Promise<ArticleEntity> {
     const article = await this.findBySlug(slug);
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['favorites']
+      relations: ['favorites'],
     });
 
-    const isNotFavorited = user.favorites.findIndex(a => a.id === article.id) === -1
+    const isNotFavorited =
+      user.favorites.findIndex((a) => a.id === article.id) === -1;
 
     if (isNotFavorited) {
       user.favorites.push(article);
@@ -139,15 +183,15 @@ export class ArticleService {
 
   async deleteArticleFromFavorites(
     slug: string,
-    userId: number
+    userId: number,
   ): Promise<ArticleEntity> {
     const article = await this.findBySlug(slug);
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['favorites']
+      relations: ['favorites'],
     });
 
-    const articleIndex = user.favorites.findIndex(a => a.id === article.id)
+    const articleIndex = user.favorites.findIndex((a) => a.id === article.id);
 
     if (articleIndex >= 0) {
       user.favorites.splice(articleIndex, 1);
@@ -162,7 +206,7 @@ export class ArticleService {
   async updateArticle(
     slug: string,
     updateArticleDto: CreateArticleDto,
-    currentUserId: number
+    currentUserId: number,
   ): Promise<ArticleEntity> {
     const article = await this.findBySlug(slug);
 
@@ -174,20 +218,23 @@ export class ArticleService {
       throw new HttpException('You are not an author', HttpStatus.FORBIDDEN);
     }
 
-    Object.assign(article, updateArticleDto)
+    Object.assign(article, updateArticleDto);
 
     return await this.articleRepository.save(article);
   }
 
-  async deleteArticle(slug: string, currentUserId: number): Promise<DeleteResult> {
-    const article = await this.findBySlug(slug)
+  async deleteArticle(
+    slug: string,
+    currentUserId: number,
+  ): Promise<DeleteResult> {
+    const article = await this.findBySlug(slug);
 
     if (!article) {
-      throw new HttpException('Article does not exist', HttpStatus.NOT_FOUND)
+      throw new HttpException('Article does not exist', HttpStatus.NOT_FOUND);
     }
 
     if (article.author.id !== currentUserId) {
-      throw new HttpException('You are not an author', HttpStatus.FORBIDDEN)
+      throw new HttpException('You are not an author', HttpStatus.FORBIDDEN);
     }
 
     return await this.articleRepository.delete({ slug });
@@ -199,9 +246,9 @@ export class ArticleService {
 
   private getSlug(title: string): string {
     return (
-      slugify(title, { lower: true })
-      + '-'
-      + (Math.random() * Math.pow(36, 6) | 0).toString(36)
-    )
+      slugify(title, { lower: true }) +
+      '-' +
+      ((Math.random() * Math.pow(36, 6)) | 0).toString(36)
+    );
   }
 }

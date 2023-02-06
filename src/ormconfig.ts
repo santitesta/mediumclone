@@ -1,5 +1,5 @@
-import { ConfigModule } from "@nestjs/config";
 import { PostgresConnectionOptions } from "typeorm/driver/postgres/PostgresConnectionOptions";
+import { ConfigModule } from "@nestjs/config";
 ConfigModule.forRoot();
 
 const config: PostgresConnectionOptions = {

@@ -1,21 +1,37 @@
-import { User } from "@app/user/decorators/user.decorator";
-import { AuthGuard } from "@app/user/guards/auth.guard";
-import { UserEntity } from "@app/user/user.entity";
-import { Body, Controller, Post, UseGuards, ValidationPipe } from "@nestjs/common"
-import { Delete, Get, Param, Put, Query, UsePipes } from "@nestjs/common/decorators";
-import { DeleteResult } from "typeorm";
-import { ArticleService } from "./article.service"
-import { CreateArticleDto } from "./dto/createArticle.dto";
-import { ArticleResponseInterface } from "./types/articleResponse.interface";
-import { ArticlesResponseInterface } from "./types/articlesResponse.interface";
+import { User } from '@app/user/decorators/user.decorator';
+import { AuthGuard } from '@app/user/guards/auth.guard';
+import { UserEntity } from '@app/user/user.entity';
+import {
+  Body,
+  Controller,
+  Post,
+  UseGuards,
+  ValidationPipe,
+} from '@nestjs/common';
+import {
+  Delete,
+  Get,
+  Param,
+  Put,
+  Query,
+  UsePipes,
+} from '@nestjs/common/decorators';
+import { DeleteResult } from 'typeorm';
+import { ArticleService } from './article.service';
+import { CreateArticleDto } from './dto/createArticle.dto';
+import { ArticleResponseInterface } from './types/articleResponse.interface';
+import { ArticlesResponseInterface } from './types/articlesResponse.interface';
 
 @Controller('articles')
 export class ArticleController {
-  constructor(private readonly articleService: ArticleService) { }
+  constructor(private readonly articleService: ArticleService) {}
 
   @Get()
-  async findAll(@User('id') currentUserId: number, @Query() query: any): Promise<ArticlesResponseInterface> {
-    return await this.articleService.findAll(currentUserId, query)
+  async findAll(
+    @User('id') currentUserId: number,
+    @Query() query: any,
+  ): Promise<ArticlesResponseInterface> {
+    return await this.articleService.findAll(currentUserId, query);
   }
 
   @Post()
@@ -23,19 +39,20 @@ export class ArticleController {
   @UsePipes(new ValidationPipe())
   async create(
     @User('id') currentUser: UserEntity,
-    @Body('article') createArticleDto: CreateArticleDto
+    @Body('article') createArticleDto: CreateArticleDto,
   ): Promise<ArticleResponseInterface> {
     const article = await this.articleService.createArticle(
       currentUser,
-      createArticleDto);
+      createArticleDto,
+    );
     return this.articleService.buildArticleResponse(article);
   }
 
   @Get(':slug')
   async getSingleArticle(
-    @Param('slug') slug: string
+    @Param('slug') slug: string,
   ): Promise<ArticleResponseInterface> {
-    const article = await this.articleService.findBySlug(slug)
+    const article = await this.articleService.findBySlug(slug);
     return this.articleService.buildArticleResponse(article);
   }
 
@@ -45,9 +62,13 @@ export class ArticleController {
   async updateArticle(
     @User('id') currentUserId: number,
     @Param('slug') slug: string,
-    @Body('article') updateArticleDto: CreateArticleDto
-  ) {
-    const article = await this.articleService.updateArticle(slug, updateArticleDto, currentUserId);
+    @Body('article') updateArticleDto: CreateArticleDto,
+  ): Promise<ArticleResponseInterface> {
+    const article = await this.articleService.updateArticle(
+      slug,
+      updateArticleDto,
+      currentUserId,
+    );
     return this.articleService.buildArticleResponse(article);
   }
 
@@ -55,18 +76,20 @@ export class ArticleController {
   @UseGuards(AuthGuard)
   async deleteArticle(
     @User('id') currentUserId: number,
-    @Param('slug') slug: string
+    @Param('slug') slug: string,
   ): Promise<DeleteResult> {
     return await this.articleService.deleteArticle(slug, currentUserId);
   }
 
   @Post(':slug/favorite')
   @UseGuards(AuthGuard)
-  async addArticleToFavorites(@User('id') currentUserId: number, @Param('slug') slug: string
+  async addArticleToFavorites(
+    @User('id') currentUserId: number,
+    @Param('slug') slug: string,
   ): Promise<ArticleResponseInterface> {
     const article = await this.articleService.addArticleToFavorites(
       slug,
-      currentUserId
+      currentUserId,
     );
 
     return this.articleService.buildArticleResponse(article);
@@ -74,11 +97,13 @@ export class ArticleController {
 
   @Delete(':slug/favorite')
   @UseGuards(AuthGuard)
-  async deleteArticleFromFavorites(@User('id') currentUserId: number, @Param('slug') slug: string
+  async deleteArticleFromFavorites(
+    @User('id') currentUserId: number,
+    @Param('slug') slug: string,
   ): Promise<ArticleResponseInterface> {
     const article = await this.articleService.deleteArticleFromFavorites(
       slug,
-      currentUserId
+      currentUserId,
     );
 
     return this.articleService.buildArticleResponse(article);

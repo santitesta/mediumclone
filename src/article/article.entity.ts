@@ -1,11 +1,17 @@
-import { UserEntity } from "@app/user/user.entity";
-import { BeforeUpdate, Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { UserEntity } from '@app/user/user.entity';
+import {
+  BeforeUpdate,
+  Column,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity({ name: 'articles' })
 export class ArticleEntity {
   @PrimaryGeneratedColumn()
   id: number;
-  0
+
   @Column()
   slug: string;
 
@@ -18,17 +24,17 @@ export class ArticleEntity {
   @Column({ default: '' })
   body: string;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  createdAt: Date;
-
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  updatedAt: Date;
-
   @Column('simple-array')
   tagList: string[];
 
   @Column({ default: 0 })
   favoritesCount: number;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  updatedAt: Date;
 
   @BeforeUpdate()
   updateTimestamp() {

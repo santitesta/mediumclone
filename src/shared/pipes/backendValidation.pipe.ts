@@ -12,8 +12,12 @@ import { validate } from 'class-validator';
 @Injectable()
 export class BackendValidationPipe implements PipeTransform {
   async transform(value: any, metadata: ArgumentMetadata) {
-    console.log('transform', value, metadata);
     const object = plainToClass(metadata.metatype, value);
+
+    if (typeof object !== 'object') {
+      return value;
+    }
+
     const errors = await validate(object);
 
     if (errors.length === 0) {
